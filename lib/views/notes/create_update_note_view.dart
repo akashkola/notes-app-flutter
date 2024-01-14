@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:notes_app_yt/services/auth/auth_service.dart';
-import 'package:notes_app_yt/services/crud/notes_service.dart';
+import 'package:notes_app_yt/services/cloud/cloud_note.dart';
+import 'package:notes_app_yt/services/cloud/firebase_cloud_storage.dart';
 import 'package:notes_app_yt/utilities/generics/get_arguments.dart';
 
 class CreateUpdateNoteView extends StatefulWidget {
@@ -12,13 +13,13 @@ class CreateUpdateNoteView extends StatefulWidget {
 }
 
 class _CreateUpdateNoteViewState extends State<CreateUpdateNoteView> {
-  DatabaseNote? _note;
-  late final NotesService _notesService;
+  CloudNote? _note;
+  late final FirebaseCloudStorae _notesService;
   late final TextEditingController _textController;
 
   @override
   void initState() {
-    _notesService = NotesService();
+    _notesService = FirebaseCloudStorae();
     _textController = TextEditingController();
     super.initState();
   }
@@ -26,9 +27,10 @@ class _CreateUpdateNoteViewState extends State<CreateUpdateNoteView> {
   Future<void> _textControllerListener() async {
     final note = _note;
     if (note != null) {
+      final text = _textController.text;
       await _notesService.updateNote(
-        note: note,
-        text: _textController.text,
+        documentId: note.documentId,
+        text: text,
       );
     }
   }
@@ -38,21 +40,24 @@ class _CreateUpdateNoteViewState extends State<CreateUpdateNoteView> {
     _textController.addListener(_textControllerListener);
   }
 
-  Future<DatabaseNote> _createOrGetExistingNote(BuildContext context) async {
-    final widgetNote = context.getArgument<DatabaseNote>();
+  Future<CloudNote> _createOrGetExistingNote(BuildContext context) async {
+    final widgetNote = context.getArgument<CloudNote>();
     if (widgetNote != null) {
       _note = widgetNote;
       _textController.text = widgetNote.text;
       return widgetNote;
     }
 
+    // to get the exisiting note in state when the hot reload happens
+    // will not be creating new note again when hot reload happens
     final existingNote = _note;
     if (existingNote != null) {
       return existingNote;
     }
+
     final currentUser = AuthService.fromFirebase().currentUser!;
-    final owner = await _notesService.getUser(email: currentUser.email!);
-    final newNote = await _notesService.createNote(owner: owner);
+    final newNote =
+        await _notesService.createNewNote(ownerUserId: currentUser.id);
     _note = newNote;
     return newNote;
   }
@@ -60,7 +65,7 @@ class _CreateUpdateNoteViewState extends State<CreateUpdateNoteView> {
   Future<void> _deleteNoteIfTextIsEmpty() async {
     final note = _note;
     if (note != null && _textController.text.isEmpty) {
-      await _notesService.deleteNote(id: note.id);
+      await _notesService.deleteNote(documentId: note.documentId);
     }
   }
 
@@ -69,7 +74,7 @@ class _CreateUpdateNoteViewState extends State<CreateUpdateNoteView> {
     final text = _textController.text;
     if (note != null && text.isNotEmpty) {
       await _notesService.updateNote(
-        note: note,
+        documentId: note.documentId,
         text: text,
       );
     }
